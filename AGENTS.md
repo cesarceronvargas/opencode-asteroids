@@ -29,4 +29,4 @@ No automated checks exist. After any change, open the game in a browser and conf
 - World is **toroidal**: positions wrap via `wrap(v, max)`; any new entity motion must keep wrapping.
 - Input has two layers: `keys[code]` (held state) and `pressed(code)` (single-frame, **consumed on read** — call it exactly once per frame in `update()`, or input is silently dropped).
 - Game state machine: `'playing'` | `'dead'` | `'gameover'` (dispatched at the top of `update()`).
-- Entity classes (`Ship`, `Asteroid`, `Bullet`, `Particle`) each expose `update(dt)`, `draw()`, and a `dead` flag used for array filtering each frame. Follow this contract when adding entities.
+- Entity classes (`Ship`, `Asteroid`, `Bullet`, `Particle`, `PowerUp`) each expose `update(dt)`, `draw()`, and a `dead` flag used for array filtering each frame. Follow this contract when adding entities.
