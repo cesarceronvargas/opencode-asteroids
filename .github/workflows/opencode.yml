@@ -32,5 +32,5 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           use_github_token: true
         with:
-          model: minimax-coding-plan/MiniMax-M3
+          model: opencode-go/glm-5.2
           
