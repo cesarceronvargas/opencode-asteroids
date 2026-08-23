@@ -308,8 +308,64 @@ class PowerUp {
   }
 }
 
+// ── BattleShip (nave de batalla morada) ───────────────────────────────────────
+// Nave enemiga del doble de tamaño que la del jugador y el doble de puntos
+// que el asteroide más valioso (100 → 200). Aparece al pulsar la tecla S.
+const BATTLE_SHIP_POINTS = 200;
+
+class BattleShip {
+  constructor() {
+    const fromLeft = Math.random() < 0.5;
+    this.x = fromLeft ? 0 : W;
+    this.y = rand(60, H - 60);
+    const dir   = fromLeft ? 1 : -1;
+    const SPEED = 140;
+    this.vx     = dir * SPEED;
+    this.vy     = rand(-25, 25);
+    this.radius = 24;            // doble del radio de la nave (12)
+    this.ttl        = 12;
+    this.rot        = rand(0, Math.PI * 2);
+    this.rotSpeed   = rand(-1.2, 1.2);
+    this.dead       = false;
+  }
+
+  update(dt) {
+    this.x   = wrap(this.x + this.vx * dt, W);
+    this.y   = wrap(this.y + this.vy * dt, H);
+    this.rot += this.rotSpeed * dt;
+    this.ttl -= dt;
+    if (this.ttl <= 0) this.dead = true;
+  }
+
+  draw() {
+    ctx.save();
+    ctx.translate(this.x, this.y);
+    ctx.rotate(this.rot);
+    ctx.strokeStyle = '#b026ff';   // morado
+    ctx.lineWidth   = 2.5;
+    ctx.lineJoin    = 'round';
+
+    // Silueta clásica de nave escalada x2 (doble de tamaño que la nave jugador)
+    ctx.beginPath();
+    ctx.moveTo( 40,  0);   // nariz
+    ctx.lineTo(-24, -18);  // ala izquierda
+    ctx.lineTo(-14,  0);   // muesca trasera
+    ctx.lineTo(-24,  18);  // ala derecha
+    ctx.closePath();
+    ctx.stroke();
+
+    // Núcleo brillante morado
+    ctx.fillStyle = 'rgba(176, 38, 255, 0.35)';
+    ctx.beginPath();
+    ctx.arc(0, 0, 6, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.restore();
+  }
+}
+
 // ── Estado del juego ──────────────────────────────────────────────────────────
-let ship, bullets, asteroids, particles, powerups;
+let ship, bullets, asteroids, particles, powerups, battleships;
 let score, lives, level;
 let state;      // 'playing' | 'dead' | 'gameover'
 let deadTimer;
@@ -332,6 +388,7 @@ function initGame() {
   asteroids = [];
   particles = [];
   powerups = [];
+  battleships = [];
   score  = 0;
   lives  = 3;
   level  = 1;
@@ -344,6 +401,7 @@ function nextLevel() {
   bullets   = [];
   particles = [];
   powerups = [];
+  battleships = [];
   ship.reset();
   spawnAsteroids(3 + level);
 }
@@ -378,8 +436,10 @@ function update(dt) {
     particles.forEach(p => p.update(dt));
     particles = particles.filter(p => !p.dead);
     asteroids.forEach(a => a.update(dt));
+    battleships.forEach(bs => bs.update(dt));
     powerups.forEach(p => p.update(dt));
     powerups = powerups.filter(p => !p.dead);
+    battleships = battleships.filter(bs => !bs.dead);
     if (deadTimer <= 0) { state = 'playing'; ship.reset(); }
     return;
   }
@@ -389,15 +449,22 @@ function update(dt) {
     bullets.push(...ship.tryShoot());
   }
 
+  // Invocar nave de batalla morada al pulsar la tecla S
+  if (pressed('KeyS')) {
+    battleships.push(new BattleShip());
+  }
+
   ship.update(dt);
   bullets.forEach(b => b.update(dt));
   asteroids.forEach(a => a.update(dt));
+  battleships.forEach(bs => bs.update(dt));
   particles.forEach(p => p.update(dt));
   powerups.forEach(p => p.update(dt));
 
-  bullets   = bullets.filter(b => !b.dead);
-  particles = particles.filter(p => !p.dead);
-  powerups  = powerups.filter(p => !p.dead);
+  bullets     = bullets.filter(b => !b.dead);
+  particles   = particles.filter(p => !p.dead);
+  powerups    = powerups.filter(p => !p.dead);
+  battleships = battleships.filter(bs => !bs.dead);
 
   // Bala vs asteroide
   const newAsteroids = [];
@@ -420,6 +487,20 @@ function update(dt) {
   asteroids = asteroids.filter(a => !a.dead).concat(newAsteroids);
   bullets   = bullets.filter(b => !b.dead);
 
+  // Bala vs nave de batalla (doble de puntos)
+  for (const b of bullets) {
+    for (const bs of battleships) {
+      if (!bs.dead && !b.dead && dist(b, bs) < bs.radius) {
+        b.dead  = true;
+        bs.dead = true;
+        score  += BATTLE_SHIP_POINTS;
+        explode(bs.x, bs.y, 16);
+      }
+    }
+  }
+  battleships = battleships.filter(bs => !bs.dead);
+  bullets     = bullets.filter(b => !b.dead);
+
   // Nave vs power-up (recoger reinicia el timer a 5s)
   for (const p of powerups) {
     if (!p.dead && dist(ship, p) < ship.radius + p.radius) {
@@ -431,12 +512,20 @@ function update(dt) {
   }
   powerups = powerups.filter(p => !p.dead);
 
-  // Nave vs asteroide
+  // Nave vs asteroide / nave de batalla
   if (ship.invincible <= 0) {
     for (const a of asteroids) {
       if (dist(ship, a) < ship.radius + a.radius * 0.82) {
         killShip();
         break;
+      }
+    }
+    if (!ship.dead) {
+      for (const bs of battleships) {
+        if (dist(ship, bs) < ship.radius + bs.radius * 0.82) {
+          killShip();
+          break;
+        }
       }
     }
   }
@@ -507,6 +596,7 @@ function draw() {
 
   particles.forEach(p => p.draw());
   asteroids.forEach(a => a.draw());
+  battleships.forEach(bs => bs.draw());
   powerups.forEach(p => p.draw());
   bullets.forEach(b => b.draw());
   ship.draw();
