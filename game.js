@@ -120,7 +120,7 @@ class Asteroid {
 
 // ── Ship ──────────────────────────────────────────────────────────────────────
 class Ship {
-  constructor() { this.reset(); }
+  constructor(type = 'classic') { this.type = type; this.reset(); }
 
   reset() {
     this.x      = W / 2;
@@ -128,7 +128,10 @@ class Ship {
     this.angle  = -Math.PI / 2;
     this.vx     = 0;
     this.vy     = 0;
-    this.radius = 12;
+    // La nave morada es del doble de tamaño
+    this.scale  = this.type === 'mega' ? 2 : 1;
+    this.radius = 12 * this.scale;
+    this.scoreMultiplier = this.scale;   // 2x puntos con la nave morada
     this.thrusting     = false;
     this.invincible    = 3;
     this.shootCooldown = 0;
@@ -172,14 +175,14 @@ class Ship {
     // Triple shot activo: 3 balas colineales en la misma dirección
     if (this.tripleShot > 0) {
       const out = [];
-      for (const NOSE of [21, 31, 41]) {
+      for (const NOSE of [21, 31, 41].map(n => n * this.scale)) {
         const ox = this.x + Math.cos(this.angle) * NOSE;
         const oy = this.y + Math.sin(this.angle) * NOSE;
         out.push(new Bullet(ox, oy, this.angle));
       }
       return out;
     }
-    const NOSE = 21;
+    const NOSE = 21 * this.scale;
     const ox = this.x + Math.cos(this.angle) * NOSE;
     const oy = this.y + Math.sin(this.angle) * NOSE;
     return [new Bullet(ox, oy, this.angle)];
@@ -193,9 +196,12 @@ class Ship {
     ctx.save();
     ctx.translate(this.x, this.y);
     ctx.rotate(this.angle);
-    // Cyan mientras el boost de velocidad está activo, amarillo con triple shot
+    ctx.scale(this.scale, this.scale);
+    // Cyan mientras el boost de velocidad está activo, amarillo con triple shot,
+    // morado para la nave grande, blanco para la clásica
     ctx.strokeStyle = this.boost > 0 ? '#0ff'
-                    : this.tripleShot > 0 ? '#ff0' : '#fff';
+                    : this.tripleShot > 0 ? '#ff0'
+                    : this.type === 'mega' ? '#b06cff' : '#fff';
     ctx.lineWidth   = 1.5;
     ctx.lineJoin    = 'round';
 
@@ -311,8 +317,10 @@ class PowerUp {
 // ── Estado del juego ──────────────────────────────────────────────────────────
 let ship, bullets, asteroids, particles, powerups;
 let score, lives, level;
-let state;      // 'playing' | 'dead' | 'gameover'
+let state;      // 'select' | 'playing' | 'dead' | 'gameover'
 let deadTimer;
+let shipType = 'classic';   // 'classic' | 'mega'
+let selectIndex = 0;        // 0 = clásica, 1 = morada
 
 function spawnAsteroids(count) {
   const SAFE_DIST = 130;
@@ -327,7 +335,7 @@ function spawnAsteroids(count) {
 }
 
 function initGame() {
-  ship          = new Ship();
+  ship          = new Ship(shipType);
   bullets   = [];
   asteroids = [];
   particles = [];
@@ -337,6 +345,15 @@ function initGame() {
   level  = 1;
   state  = 'playing';
   spawnAsteroids(4);
+}
+
+function enterSelect() {
+  state       = 'select';
+  selectIndex = shipType === 'mega' ? 1 : 0;
+  bullets   = [];
+  asteroids = [];
+  particles = [];
+  powerups = [];
 }
 
 function nextLevel() {
@@ -366,8 +383,20 @@ function killShip() {
 
 // ── Update ────────────────────────────────────────────────────────────────────
 function update(dt) {
+  if (state === 'select') {
+    if (pressed('ArrowLeft'))  selectIndex = selectIndex === 0 ? 1 : 0;
+    if (pressed('ArrowRight')) selectIndex = selectIndex === 0 ? 1 : 0;
+    if (pressed('Digit1')) selectIndex = 0;
+    if (pressed('Digit2')) selectIndex = 1;
+    if (pressed('Space') || pressed('Enter')) {
+      shipType = selectIndex === 0 ? 'classic' : 'mega';
+      initGame();
+    }
+    return;
+  }
+
   if (state === 'gameover') {
-    if (pressed('Space')) initGame();
+    if (pressed('Space')) enterSelect();
     particles.forEach(p => p.update(dt));
     particles = particles.filter(p => !p.dead);
     return;
@@ -406,7 +435,7 @@ function update(dt) {
       if (!a.dead && !b.dead && dist(b, a) < a.radius) {
         b.dead = true;
         a.dead = true;
-        score += POINTS[a.size];
+        score += POINTS[a.size] * ship.scoreMultiplier;
         explode(a.x, a.y, a.size * 5);
         newAsteroids.push(...a.split());
         // 15% de probabilidad de soltar un power-up (velocidad o triple shot)
@@ -450,7 +479,7 @@ function drawLifeIcon(x, y) {
   ctx.save();
   ctx.translate(x, y);
   ctx.rotate(-Math.PI / 2);
-  ctx.strokeStyle = '#fff';
+  ctx.strokeStyle = ship.type === 'mega' ? '#b06cff' : '#fff';
   ctx.lineWidth   = 1.2;
   ctx.lineJoin    = 'round';
   ctx.beginPath();
@@ -501,9 +530,72 @@ function drawOverlay(title, sub) {
   ctx.fillText(sub, W / 2, H / 2 + 22);
 }
 
+function drawShipPreview(x, y, type) {
+  const scale = type === 'mega' ? 2 : 1;
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(-Math.PI / 2);
+  ctx.scale(scale, scale);
+  ctx.strokeStyle = type === 'mega' ? '#b06cff' : '#fff';
+  ctx.lineWidth   = 1.5;
+  ctx.lineJoin    = 'round';
+  ctx.beginPath();
+  ctx.moveTo( 20,  0);
+  ctx.lineTo(-12, -9);
+  ctx.lineTo( -7,  0);
+  ctx.lineTo(-12,  9);
+  ctx.closePath();
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawSelect() {
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#fff';
+  ctx.font      = 'bold 38px monospace';
+  ctx.fillText('SELECCIONA TU NAVE', W / 2, 110);
+
+  const positions = [W / 2 - 150, W / 2 + 150];
+  const labels    = ['CLASICA', 'MORADA X2'];
+  const subs      = ['PUNTOS NORMALES', 'DOBLE PUNTOS - DOBLE TAMAÑO'];
+  const types     = ['classic', 'mega'];
+
+  for (let i = 0; i < 2; i++) {
+    const x = positions[i];
+    const y = H / 2 - 10;
+    const selected = i === selectIndex;
+
+    if (selected) {
+      ctx.strokeStyle = types[i] === 'mega' ? '#b06cff' : '#fff';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(x - 80, y - 70, 160, 140);
+    }
+
+    drawShipPreview(x, y, types[i]);
+
+    ctx.font      = 'bold 18px monospace';
+    ctx.fillStyle = selected ? (types[i] === 'mega' ? '#b06cff' : '#fff')
+                             : 'rgba(255,255,255,0.5)';
+    ctx.fillText(labels[i], x, y + 90);
+
+    ctx.font      = '12px monospace';
+    ctx.fillStyle = 'rgba(255,255,255,0.6)';
+    ctx.fillText(subs[i], x, y + 108);
+  }
+
+  ctx.font      = '15px monospace';
+  ctx.fillStyle = 'rgba(255,255,255,0.7)';
+  ctx.fillText('IZQ/DER SELECCIONAR     ESPACIO CONFIRMAR', W / 2, H - 60);
+}
+
 function draw() {
   ctx.fillStyle = '#000';
   ctx.fillRect(0, 0, W, H);
+
+  if (state === 'select') {
+    drawSelect();
+    return;
+  }
 
   particles.forEach(p => p.draw());
   asteroids.forEach(a => a.draw());
@@ -514,7 +606,7 @@ function draw() {
   drawHUD();
 
   if (state === 'gameover')
-    drawOverlay('GAME OVER', `PUNTAJE: ${score}   —   ESPACIO PARA REINICIAR`);
+    drawOverlay('GAME OVER', `PUNTAJE: ${score}   —   ESPACIO PARA CONTINUAR`);
 }
 
 // ── Loop principal ────────────────────────────────────────────────────────────
@@ -528,5 +620,5 @@ function loop(ts) {
   requestAnimationFrame(loop);
 }
 
-initGame();
+enterSelect();
 requestAnimationFrame(loop);

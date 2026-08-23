@@ -28,5 +28,6 @@ No automated checks exist. After any change, open the game in a browser and conf
 - Entity motion is **delta-time based** (`dt` in seconds). The loop clamps `dt` to `0.05` to survive tab-switch stalls.
 - World is **toroidal**: positions wrap via `wrap(v, max)`; any new entity motion must keep wrapping.
 - Input has two layers: `keys[code]` (held state) and `pressed(code)` (single-frame, **consumed on read** — call it exactly once per frame in `update()`, or input is silently dropped).
-- Game state machine: `'playing'` | `'dead'` | `'gameover'` (dispatched at the top of `update()`).
+- Game state machine: `'select'` | `'playing'` | `'dead'` | `'gameover'` (dispatched at the top of `update()`). `'select'` is the ship-picker shown at launch and after game over.
 - Entity classes (`Ship`, `Asteroid`, `Bullet`, `Particle`, `PowerUp`) each expose `update(dt)`, `draw()`, and a `dead` flag used for array filtering each frame. Follow this contract when adding entities.
+- Two ship types selectable on the `'select'` screen: `'classic'` (white, 1× size/points) and `'mega'` (purple, 2× size/points). `Ship` takes a `type`; `ship.scoreMultiplier` scales asteroid points.
