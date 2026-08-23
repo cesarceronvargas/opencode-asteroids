@@ -30,6 +30,7 @@ jobs:
         env:
           OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          use_github_token: true
         with:
           model: minimax-coding-plan/MiniMax-M3
-          use_github_token: true
+          
